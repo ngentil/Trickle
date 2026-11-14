@@ -1,0 +1,16 @@
+[Unit]
+Description=Trickle worker
+After=network-online.target ModemManager.service tailscaled.service
+Wants=network-online.target
+
+[Service]
+EnvironmentFile=/etc/trickle/worker.env
+ExecStart=/usr/bin/python3 /opt/trickle/worker.py
+Restart=always
+RestartSec=15
+# background citizen: lowest CPU and IO priority
+Nice=10
+IOSchedulingClass=idle
+
+[Install]
+WantedBy=multi-user.target
