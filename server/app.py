@@ -1,7 +1,7 @@
 # SPDX-License-Identifier: AGPL-3.0-only
 # Copyright (C) 2026 Nathan Gentil
 """
-Trickle scheduler v0.2: deadline-priced background compute.
+Moon Pickle scheduler v0.2: deadline-priced background compute.
 
 Runs on any x86-64 box (FastAPI + uvicorn + SQLite).
 The fleet is OpenStick sticks on 4G LTE, behind carrier NAT, paying per byte.
@@ -17,7 +17,7 @@ Design choices that follow from that:
 - Per-worker tokens: a stolen stick can only lease and report, not submit.
 
 Run:
-    TRICKLE_ADMIN_TOKEN=... uvicorn app:app --host 0.0.0.0 --port 8700
+    MOONPICKLE_ADMIN_TOKEN=... uvicorn app:app --host 0.0.0.0 --port 8700
 Docs (OpenAPI) at /docs.
 """
 from __future__ import annotations
@@ -41,16 +41,16 @@ from fastapi.middleware.gzip import GZipMiddleware
 from fastapi.responses import HTMLResponse
 from pydantic import BaseModel, Field
 
-VERSION = "0.2.0"
-ADMIN_TOKEN = os.environ.get("TRICKLE_ADMIN_TOKEN", "")
-DB_PATH = os.environ.get("TRICKLE_DB", "trickle.db")
-LEASE_GRACE_S = int(os.environ.get("TRICKLE_LEASE_GRACE", "120"))     # past timeout before a lease expires
-WORKER_STALE_S = int(os.environ.get("TRICKLE_WORKER_STALE", "300"))  # 4G drops out; be patient
+VERSION = "0.2.1"
+ADMIN_TOKEN = os.environ.get("MOONPICKLE_ADMIN_TOKEN", "")
+DB_PATH = os.environ.get("MOONPICKLE_DB", "moonpickle.db")
+LEASE_GRACE_S = int(os.environ.get("MOONPICKLE_LEASE_GRACE", "120"))     # past timeout before a lease expires
+WORKER_STALE_S = int(os.environ.get("MOONPICKLE_WORKER_STALE", "300"))  # 4G drops out; be patient
 LONGPOLL_MAX_S = 55
-GHOST_AFTER_S = int(os.environ.get("TRICKLE_GHOST_AFTER", "90"))    # leased but stick says it never got it
+GHOST_AFTER_S = int(os.environ.get("MOONPICKLE_GHOST_AFTER", "90"))    # leased but stick says it never got it
 REAP_EVERY_S = 15
 MAX_OUTPUT = 64 * 1024
-BASE_RATE = float(os.environ.get("TRICKLE_BASE_RATE", "1.0"))        # credits per est. CPU-hour, day tier
+BASE_RATE = float(os.environ.get("MOONPICKLE_BASE_RATE", "1.0"))        # credits per est. CPU-hour, day tier
 
 PRICE_TIERS = [  # (max hours of slack, multiplier, name)
     (1, 4.0, "rush"),
@@ -188,13 +188,13 @@ async def reaper_task():
 async def lifespan(_app):
     wake.bind()
     if not ADMIN_TOKEN:
-        print("WARNING: TRICKLE_ADMIN_TOKEN not set — admin API is open")
+        print("WARNING: MOONPICKLE_ADMIN_TOKEN not set — admin API is open")
     task = asyncio.create_task(reaper_task())
     yield
     task.cancel()
 
 
-app = FastAPI(title="Trickle", version=VERSION, lifespan=lifespan,
+app = FastAPI(title="Moon Pickle", version=VERSION, lifespan=lifespan,
               description="Deadline-priced background compute on a fleet of junk hardware.")
 app.add_middleware(GZipMiddleware, minimum_size=500)
 
@@ -327,12 +327,12 @@ def status():
 
 @app.post("/api/workers", status_code=201, dependencies=[Depends(admin)], tags=["fleet"])
 def add_worker(w: WorkerIn):
-    tok = "tkw_" + secrets.token_urlsafe(24)
+    tok = "mpw_" + secrets.token_urlsafe(24)
     try:
         db.x("INSERT INTO workers (id, token_hash, created) VALUES (?,?,?)", (w.id, hash_token(tok), time.time()))
     except sqlite3.IntegrityError:
         raise HTTPException(409, "worker already exists (remove it first to reissue a token)")
-    return {"id": w.id, "token": tok, "note": "shown once — put it in the stick's /etc/trickle.env"}
+    return {"id": w.id, "token": tok, "note": "shown once — put it in the stick's /etc/moonpickle.env"}
 
 
 @app.delete("/api/workers/{worker_id}", dependencies=[Depends(admin)], tags=["fleet"])
@@ -456,7 +456,7 @@ def dashboard():
         f"<td>{_mb((w.get('net') or {}).get('rx'))}/{_mb((w.get('net') or {}).get('tx'))}</td>"
         f"<td>{_ago(now - w['last_seen']) + ' ago' if w['last_seen'] else 'never'}</td>"
         f"<td>{e(', '.join(w.get('running', [])) or 'idle')}</td></tr>" for w in s["workers"]) \
-        or "<tr><td colspan=8>No workers — add one with <code>trickle worker add NAME</code></td></tr>"
+        or "<tr><td colspan=8>No workers — add one with <code>moonpickle worker add NAME</code></td></tr>"
     jrows = "".join(
         f"<tr class='{j['status']}'><td>{j['id']}</td><td>{e(j['status'])}{' ⚠late' if j['late'] else ''}</td>"
         f"<td>{e(j['tier'])}</td>"
@@ -468,14 +468,14 @@ def dashboard():
     counts = " · ".join(f"{k}: {v}" for k, v in sorted(s["jobs"].items())) or "empty"
     return f"""<!doctype html><html><head><meta charset=utf-8>
 <meta name=viewport content="width=device-width,initial-scale=1"><meta http-equiv=refresh content=10>
-<title>Trickle</title><style>
+<title>Moon Pickle</title><style>
 body{{font:14px system-ui,sans-serif;margin:12px;background:#111;color:#ddd}}
 h1{{font-size:18px;margin:0 0 4px}} h2{{font-size:15px;margin:18px 0 6px}}
 .wrap{{overflow-x:auto}} table{{border-collapse:collapse;width:100%;white-space:nowrap}}
 td,th{{padding:4px 6px;border-bottom:1px solid #333;text-align:left}}
 code{{font-size:12px;color:#9cf}} .leased td{{color:#fd6}} .failed td{{color:#f77}} .done td{{color:#8c8}}
 .cancelled td{{color:#888}} .muted{{color:#888}}</style></head><body>
-<h1>Trickle <span class=muted>v{VERSION}</span></h1><div class=muted>{counts} · overdue: {s['overdue']}</div>
+<h1>Moon Pickle <span class=muted>v{VERSION}</span></h1><div class=muted>{counts} · overdue: {s['overdue']}</div>
 <h2>Fleet</h2><div class=wrap><table><tr><th>Worker</th><th>Load</th><th>RAM MB</th><th>°C</th>
 <th>LTE</th><th>Data MB rx/tx</th><th>Seen</th><th>Running</th></tr>{wrows}</table></div>
 <h2>Jobs</h2><div class=wrap><table><tr><th>ID</th><th>Status</th><th>Tier</th><th>Deadline</th><th>Worker</th>

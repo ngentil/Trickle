@@ -1,11 +1,11 @@
 [Unit]
-Description=Trickle worker
+Description=Moon Pickle worker
 After=network-online.target ModemManager.service tailscaled.service
 Wants=network-online.target
 
 [Service]
-EnvironmentFile=/etc/trickle/worker.env
-ExecStart=/usr/bin/python3 /opt/trickle/worker.py
+EnvironmentFile=/etc/moonpickle/worker.env
+ExecStart=/usr/bin/python3 /opt/moonpickle/worker.py
 Restart=always
 RestartSec=15
 # background citizen: lowest CPU and IO priority

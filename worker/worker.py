@@ -2,7 +2,7 @@
 # SPDX-License-Identifier: AGPL-3.0-only
 # Copyright (C) 2026 Nathan Gentil
 """
-Trickle worker v0.2. Runs on anything with Python 3.8+ (Linux, macOS, BSD).
+Moon Pickle worker v0.2. Runs on anything with Python 3.8+ (Linux, macOS, BSD).
 
 Stdlib only, so there's nothing to install. The first target is OpenStick
 4G LTE sticks, so it is built for the worst case, a metered, flaky mobile link:
@@ -14,7 +14,7 @@ Stdlib only, so there's nothing to install. The first target is OpenStick
 - Each job reports how many bytes the stick moved while it ran.
 
 Run:
-    TRICKLE_SERVER=http://100.x.y.z:8700 TRICKLE_WORKER_TOKEN=tkw_... python3 worker.py
+    MOONPICKLE_SERVER=http://100.x.y.z:8700 MOONPICKLE_WORKER_TOKEN=mpw_... python3 worker.py
 """
 import argparse
 import gzip
@@ -31,7 +31,7 @@ import time
 import urllib.error
 import urllib.request
 
-VERSION = "0.2.0"
+VERSION = "0.2.1"
 MAX_OUTPUT = 64 * 1024
 LONGPOLL_S = 50
 
@@ -232,10 +232,10 @@ class Worker:
     def run(self, slot, job):
         jid = job["id"]
         log(f"slot {slot}: start {jid}  {job['cmd'][:70]}")
-        jobdir = tempfile.mkdtemp(prefix=f"trickle-{jid}-", dir=self.workdir)
-        env = dict(os.environ, TRICKLE_JOB_ID=jid, TRICKLE_WORKER=self.name,
-                   TRICKLE_DEADLINE=str(job["deadline"]), TRICKLE_TAGS=job.get("tags") or "")
-        env.pop("TRICKLE_WORKER_TOKEN", None)          # jobs don't get the stick's credentials
+        jobdir = tempfile.mkdtemp(prefix=f"moonpickle-{jid}-", dir=self.workdir)
+        env = dict(os.environ, MOONPICKLE_JOB_ID=jid, MOONPICKLE_WORKER=self.name,
+                   MOONPICKLE_DEADLINE=str(job["deadline"]), MOONPICKLE_TAGS=job.get("tags") or "")
+        env.pop("MOONPICKLE_WORKER_TOKEN", None)          # jobs don't get the stick's credentials
         net0 = net_bytes(self.ifaces)
         t0 = time.time()
         out = err = b""
@@ -250,9 +250,9 @@ class Worker:
             except subprocess.TimeoutExpired:
                 os.killpg(p.pid, signal.SIGKILL)
                 out, err = p.communicate()
-                exit_code, err = 124, err + b"\n[trickle] killed: timeout"
+                exit_code, err = 124, err + b"\n[moonpickle] killed: timeout"
         except Exception as exc:  # noqa: BLE001 — report it, don't die
-            exit_code, err = 125, f"[trickle] worker error: {exc}".encode()
+            exit_code, err = 125, f"[moonpickle] worker error: {exc}".encode()
         finally:
             shutil.rmtree(jobdir, ignore_errors=True)
             with self.lock:
@@ -294,7 +294,7 @@ class Worker:
         log(f"gave up reporting {jid}; the server will requeue it")
 
     def start(self):
-        log(f"trickle worker {VERSION} '{self.name}' → {self.c.server}  slots={self.slots}")
+        log(f"moonpickle worker {VERSION} '{self.name}' → {self.c.server}  slots={self.slots}")
         threading.Thread(target=self.heartbeat_loop, daemon=True).start()
         threads = [threading.Thread(target=self.slot_loop, args=(i,), daemon=True) for i in range(self.slots)]
         for t in threads:
@@ -310,20 +310,20 @@ class Worker:
 
 def main():
     env = os.environ.get
-    ap = argparse.ArgumentParser(description="Trickle worker")
-    ap.add_argument("--server", default=env("TRICKLE_SERVER", "http://127.0.0.1:8700"))
-    ap.add_argument("--name", default=env("TRICKLE_WORKER_NAME", socket.gethostname()), help="label for logs")
-    ap.add_argument("--slots", type=int, default=int(env("TRICKLE_SLOTS", "1")))
-    ap.add_argument("--workdir", default=env("TRICKLE_WORKDIR", tempfile.gettempdir()))
-    ap.add_argument("--max-temp", type=float, default=float(env("TRICKLE_MAX_TEMP", "75")))
-    ap.add_argument("--heartbeat", type=int, default=int(env("TRICKLE_HEARTBEAT", "60")),
+    ap = argparse.ArgumentParser(description="Moon Pickle worker")
+    ap.add_argument("--server", default=env("MOONPICKLE_SERVER", "http://127.0.0.1:8700"))
+    ap.add_argument("--name", default=env("MOONPICKLE_WORKER_NAME", socket.gethostname()), help="label for logs")
+    ap.add_argument("--slots", type=int, default=int(env("MOONPICKLE_SLOTS", "1")))
+    ap.add_argument("--workdir", default=env("MOONPICKLE_WORKDIR", tempfile.gettempdir()))
+    ap.add_argument("--max-temp", type=float, default=float(env("MOONPICKLE_MAX_TEMP", "75")))
+    ap.add_argument("--heartbeat", type=int, default=int(env("MOONPICKLE_HEARTBEAT", "60")),
                     help="seconds between heartbeats (data cost vs freshness)")
-    ap.add_argument("--ifaces", default=env("TRICKLE_NET_IFACES", ""),
+    ap.add_argument("--ifaces", default=env("MOONPICKLE_NET_IFACES", ""),
                     help="comma list of interfaces to meter, e.g. wwan0 (default: all but lo/tailscale)")
     a = ap.parse_args()
-    token = env("TRICKLE_WORKER_TOKEN", "")
+    token = env("MOONPICKLE_WORKER_TOKEN", "")
     if not token:
-        raise SystemExit("TRICKLE_WORKER_TOKEN is not set (get one with: trickle worker add <name>)")
+        raise SystemExit("MOONPICKLE_WORKER_TOKEN is not set (get one with: moonpickle worker add <name>)")
     os.makedirs(a.workdir, exist_ok=True)
     Worker(Client(a.server, token), a.name, a.slots, a.workdir, a.max_temp, a.heartbeat,
            [i for i in a.ifaces.split(",") if i]).start()

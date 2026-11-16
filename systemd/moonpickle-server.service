@@ -1,0 +1,15 @@
+[Unit]
+Description=Moon Pickle scheduler
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+EnvironmentFile=/etc/moonpickle/server.env
+WorkingDirectory=/opt/moonpickle/server
+ExecStart=/opt/moonpickle/venv/bin/uvicorn app:app --host 0.0.0.0 --port 8700 --proxy-headers
+StateDirectory=moonpickle
+Restart=always
+RestartSec=5
+
+[Install]
+WantedBy=multi-user.target

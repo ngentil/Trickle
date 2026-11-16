@@ -2,15 +2,15 @@
 # SPDX-License-Identifier: AGPL-3.0-only
 # Copyright (C) 2026 Nathan Gentil
 r"""
-trickle: admin command-line client (runs anywhere; stdlib only).
+moonpickle: admin command-line client (runs anywhere; stdlib only).
 
-    trickle submit "python3 ocr.py --job \$TRICKLE_JOB_ID" --hours 168 --count 50 --tags plates
-    trickle ls [--status queued] [--tag plates]
-    trickle show <id>          trickle cancel <id>
-    trickle status             trickle quote --hours 168 --cpu 3600
-    trickle worker add <name>  trickle worker rm <name>
+    moonpickle submit "python3 ocr.py --job \$MOONPICKLE_JOB_ID" --hours 168 --count 50 --tags plates
+    moonpickle ls [--status queued] [--tag plates]
+    moonpickle show <id>          moonpickle cancel <id>
+    moonpickle status             moonpickle quote --hours 168 --cpu 3600
+    moonpickle worker add <name>  moonpickle worker rm <name>
 
-Uses TRICKLE_SERVER and TRICKLE_ADMIN_TOKEN.
+Uses MOONPICKLE_SERVER and MOONPICKLE_ADMIN_TOKEN.
 """
 import argparse
 import json
@@ -20,8 +20,8 @@ import time
 import urllib.error
 import urllib.request
 
-SERVER = os.environ.get("TRICKLE_SERVER", "http://127.0.0.1:8700").rstrip("/")
-TOKEN = os.environ.get("TRICKLE_ADMIN_TOKEN", "")
+SERVER = os.environ.get("MOONPICKLE_SERVER", "http://127.0.0.1:8700").rstrip("/")
+TOKEN = os.environ.get("MOONPICKLE_ADMIN_TOKEN", "")
 
 
 def call(method, path, body=None):
@@ -52,7 +52,7 @@ def mb(b):
 
 
 def main():
-    ap = argparse.ArgumentParser(prog="trickle")
+    ap = argparse.ArgumentParser(prog="moonpickle")
     sub = ap.add_subparsers(dest="cmd", required=True)
     s = sub.add_parser("submit", help="queue a job")
     s.add_argument("command")
@@ -97,7 +97,7 @@ def main():
         print(call("POST", f"/api/jobs/{a.id}/cancel"))
     elif a.cmd == "status":
         s = call("GET", "/api/status")
-        print(f"trickle {s['version']}  jobs: {s['jobs']}  overdue: {s['overdue']}")
+        print(f"moonpickle {s['version']}  jobs: {s['jobs']}  overdue: {s['overdue']}")
         for w in s["workers"]:
             lte, net = w.get("lte") or {}, w.get("net") or {}
             sig = f"{lte['signal']}% {lte.get('tech', '')}" if lte.get("signal") is not None else "–"
@@ -109,7 +109,7 @@ def main():
     elif a.cmd == "worker":
         if a.action == "add":
             r = call("POST", "/api/workers", {"id": a.name})
-            print(f"worker '{r['id']}' added. Token (shown once):\n\n  TRICKLE_WORKER_TOKEN={r['token']}\n")
+            print(f"worker '{r['id']}' added. Token (shown once):\n\n  MOONPICKLE_WORKER_TOKEN={r['token']}\n")
         else:
             print(call("DELETE", f"/api/workers/{a.name}"))
 
