@@ -1,0 +1,15 @@
+[Unit]
+Description=Ratrun scheduler
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+EnvironmentFile=/etc/ratrun/server.env
+WorkingDirectory=/opt/ratrun/server
+ExecStart=/opt/ratrun/venv/bin/uvicorn app:app --host 0.0.0.0 --port 8700 --proxy-headers
+StateDirectory=ratrun
+Restart=always
+RestartSec=5
+
+[Install]
+WantedBy=multi-user.target
